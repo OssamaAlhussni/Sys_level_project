@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+
 int is_txt(const char *name)
 {
     int len = strlen(name);
@@ -11,6 +12,7 @@ int is_txt(const char *name)
     if (len < 4) {
         return 0;
     }
+
     //by adding the length of the string to itself
     //makes it point to the /0 character
     //then we go back 4 characters
@@ -48,7 +50,7 @@ static void add_file(FileList *list, const char *path, long size)
     if (list->count == list->capacity) {
         list->capacity *= 2;
 
-	//reallocate memory of items to a new address with bigger size
+        //reallocate memory of items to a new address with bigger size
         FileInfo *temp = realloc(list->items,
                                  list->capacity * sizeof(FileInfo));
 
@@ -59,6 +61,7 @@ static void add_file(FileList *list, const char *path, long size)
 
         list->items = temp;
     }
+
     //copies path of the file into the path variable in the fileinfo struct
     // limits size to MAX_PATH
     snprintf(list->items[list->count].path, MAX_PATH, "%s", path);
@@ -68,39 +71,49 @@ static void add_file(FileList *list, const char *path, long size)
     list->count++;
 }
 
-static void scan_recursive(const char *dir, FileList *list)
+void scan_recursive(const char *dir, FileList *list)
 {
+    if (!g_running) {
+        return;
+    }
+
     //open the dir at the path given and assign dp to its address
     DIR *dp = opendir(dir);
+
     //if doesnt exist or cant open it it exits the function call
     if (dp == NULL) {
         perror("opendir");
         return;
     }
+
     struct dirent *entry;
     //entry holds the name and type of the current folder/file
-    while (entry = readdir(dp)) {
+    while (g_running && (entry = readdir(dp)) != NULL) {
         //skips the current and parent folder to avoid forever loop
         if (strcmp(entry->d_name, ".") == 0 ||
-                      strcmp(entry->d_name, "..") == 0) {
+            strcmp(entry->d_name, "..") == 0) {
             continue;
         }
 
+	//skip the logs directory just so for our specific scenario
+	if (strcmp(entry->d_name, "logs") == 0) continue;
+
         char fullpath[MAX_PATH];
-	//copies the full folder name and subfolder/filename into fullpath
+        //copies the full folder name and subfolder/filename into fullpath
         snprintf(fullpath, MAX_PATH, "%s/%s", dir, entry->d_name);
 
         struct stat st;
-	//assigns the properties of the folder/file at the path to st
-	//error checking
+        //assigns the properties of the folder/file at the path to st
+        //error checking if file cant be opened or doesnt exist
         if (stat(fullpath, &st) == -1) {
             perror("stat");
             continue;
         }
-	//check if the path is a dir
-	// if it is then call the function to go through the subfolders
-	//if it points to a file and of type .txt
-	//then add it to the list
+
+        //check if the path is a dir
+        //if it is then call the function to go through the subfolders
+        //if it points to a file and of type .txt
+        //then add it to the list
         if (S_ISDIR(st.st_mode)) {
             scan_recursive(fullpath, list);
         } else if (S_ISREG(st.st_mode) && is_txt(entry->d_name)) {
